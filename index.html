@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>N彅剛でんぐり返しマップ</title>
+    <title>草彅剛でんぐり返しマップ</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         #map { width: 100%; height: 100vh; margin: 0; background: #e5e7eb; }
@@ -152,7 +152,7 @@
 
     <div id="info-panel">
         <div class="panel-header" id="panel-header">
-            <h2>N彅剛でんぐり返しマップ</h2>
+            <h2>草彅剛でんぐり返しマップ</h2>
             <span class="toggle-icon" id="toggle-icon">▲</span>
         </div>
         <div id="panel-body">
@@ -201,17 +201,17 @@
             attribution: 'Tiles &copy; Esri'
         });
 
-        // 地図初期化
+        // 地図初期化（デフォルトを衛星写真: esriSat に変更）
         var map = L.map('map', {
             zoomControl: false,
             worldCopyJump: true,
-            layers: [osm]
+            layers: [esriSat]
         }).setView([startLat, startLon], 16);
 
         // 切り替えコントロール
         const baseMaps = {
-            "標準": osm,
             "衛星写真": esriSat,
+            "標準": osm,
             "ダークグレー": esriDark
         };
         L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
