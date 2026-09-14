@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>地球一周トラッカー（時速4kmリアルタイム）</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -15,7 +16,7 @@
             box-shadow: 0 0 8px rgba(0, 118, 255, 0.6);
         }
 
-        /* 情報パネル */
+        /* PC向け情報パネル */
         #info-panel {
             position: absolute;
             top: 15px;
@@ -29,6 +30,7 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
             backdrop-filter: blur(8px);
             min-width: 290px;
+            box-sizing: border-box;
         }
         #info-panel h2 {
             margin: 0 0 10px 0;
@@ -52,7 +54,7 @@
         .track-btn {
             width: 100%;
             margin-top: 12px;
-            padding: 8px 0;
+            padding: 10px 0;
             background: #0076ff;
             color: #ffffff;
             border: none;
@@ -62,11 +64,11 @@
             cursor: pointer;
             transition: all 0.2s ease;
             box-shadow: 0 2px 8px rgba(0, 118, 255, 0.3);
+            -webkit-tap-highlight-color: transparent;
         }
         .track-btn:hover {
             background: #0060df;
         }
-        /* 追尾OFF時のボタンデザイン */
         .track-btn.is-off {
             background: #e2e8f0;
             color: #475569;
@@ -75,6 +77,38 @@
         .track-btn.is-off:hover {
             background: #cbd5e1;
             color: #1e293b;
+        }
+
+        /* スマホ向けレスポンシブ設定 (画面幅 640px 以下) */
+        @media (max-width: 640px) {
+            #info-panel {
+                top: auto;
+                bottom: 20px;
+                left: 10px;
+                right: 10px;
+                min-width: 0;
+                padding: 12px 14px;
+                border-radius: 12px;
+            }
+            #info-panel h2 {
+                font-size: 13px;
+                margin-bottom: 6px;
+                padding-bottom: 4px;
+            }
+            .info-row {
+                margin: 4px 0;
+                font-size: 11px;
+            }
+            .track-btn {
+                margin-top: 10px;
+                padding: 12px 0; /* タップしやすいよう高さを確保 */
+                font-size: 13px;
+            }
+            /* 地図コントロールの余白を調整 */
+            .leaflet-top.leaflet-right {
+                top: 10px;
+                right: 10px;
+            }
         }
     </style>
 </head>
@@ -267,16 +301,15 @@
             }
         }
 
-        // ボタンクリック時の挙動
+        // ボタンクリック／タップ時の挙動
         btnTrack.addEventListener('click', () => {
             setTrackingState(!isTracking);
             if (isTracking) {
-                // 追尾ONにした瞬間、ピンの位置にカメラをスムーズ移動
                 map.panTo(movingMarker.getLatLng(), { animate: true });
             }
         });
 
-        // ユーザーが手動で地図をドラッグ動かした場合は自動で追尾OFFにする
+        // ドラッグ（マウス／タッチ）開始で自動的に追尾解除
         map.on('dragstart', () => {
             if (isTracking) {
                 setTrackingState(false);
@@ -312,7 +345,7 @@
             // ピン位置の更新
             movingMarker.setLatLng([currentLat, currentLon]);
 
-            // カメラ追尾（isTracking が true の時のみカメラを動かす）
+            // カメラ追尾
             if (isTracking) {
                 map.setView([currentLat, currentLon], map.getZoom(), { animate: false });
             }
