@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>地球一周トラッカー（時速4kmリアルタイム）</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { width: 100%; height: 100vh; margin: 0; background: #e5e7eb; }
+        body { margin: 0; padding: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; }
+        
+        .glow-marker {
+            background: #0076ff;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(0, 118, 255, 0.6);
+        }
+
+        /* 情報パネル */
+        #info-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.92);
+            color: #0f172a;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            backdrop-filter: blur(8px);
+            min-width: 290px;
+        }
+        #info-panel h2 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #0076ff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 6px;
+        }
+        .info-row {
+            margin: 6px 0;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-label { color: #64748b; }
+        .info-val { color: #0f172a; font-weight: bold; }
+
+        /* 追尾切り替えボタン */
+        .track-btn {
+            width: 100%;
+            margin-top: 12px;
+            padding: 8px 0;
+            background: #0076ff;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 118, 255, 0.3);
+        }
+        .track-btn:hover {
+            background: #0060df;
+        }
+        /* 追尾OFF時のボタンデザイン */
+        .track-btn.is-off {
+            background: #e2e8f0;
+            color: #475569;
+            box-shadow: none;
+        }
+        .track-btn.is-off:hover {
+            background: #cbd5e1;
+            color: #1e293b;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info-panel">
+        <h2>リアルタイム追尾ステータス</h2>
+        <div class="info-row"><span class="info-label">開始日時:</span> <span class="info-val">2009年04月23日 03:00:00</span></div>
+        <div class="info-row"><span class="info-label">現在日時:</span> <span class="info-val" id="val-time">-</span></div>
+        <div class="info-row"><span class="info-label">移動速度:</span> <span class="info-val">時速 4.0 km</span></div>
+        <div class="info-row"><span class="info-label">緯度:</span> <span class="info-val" id="val-lat">-</span></div>
+        <div class="info-row"><span class="info-label">経度:</span> <span class="info-val" id="val-lon">-</span></div>
+        <div class="info-row"><span class="info-label">総移動距離:</span> <span class="info-val" id="val-dist">-</span></div>
+        <div class="info-row"><span class="info-label">周回状況:</span> <span class="info-val" id="val-loops">-</span></div>
+        
+        <button id="btn-track" class="track-btn">追尾を解除</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const startLat = 35.666694;
+        const startLon = 139.732222;
+        const targetLat = 35.666778;
+        const targetLon = 139.732056;
+
+        // 2009年4月23日 午前3時00分00秒 (JST)
+        const START_TIME_MS = new Date('2009-04-23T03:00:00+09:00').getTime();
+
+        const EARTH_RADIUS_KM = 6371.0088;
+        const SPEED_KM_H = 4.0; // 時速4km
+        const SPEED_KM_MS = SPEED_KM_H / 3600000; // 1ミリ秒あたりの移動距離(km)
+
+        // 追尾フラグ（初期状態はON）
+        let isTracking = true;
+
+        // 地図タイル定義
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        });
+
+        const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18,
+            attribution: 'Tiles &copy; Esri'
+        });
+
+        const esriDark = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 16,
+            attribution: 'Tiles &copy; Esri'
+        });
+
+        // 地図初期化
+        var map = L.map('map', {
+            zoomControl: false,
+            worldCopyJump: true,
+            layers: [osm]
+        }).setView([startLat, startLon], 16);
+
+        // 切り替えコントロール
+        const baseMaps = {
+            "標準": osm,
+            "衛星写真": esriSat,
+            "ダークグレー": esriDark
+        };
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+
+        // 2点を通る大圏コース座標群を生成
+        function generateGreatCircleOrbit(lat1, lon1, lat2, lon2, pointsPerLoop = 2000) {
+            const toRad = deg => deg * Math.PI / 180;
+            const toDeg = rad => rad * 180 / Math.PI;
+
+            const phi1 = toRad(lat1), lam1 = toRad(lon1);
+            const phi2 = toRad(lat2), lam2 = toRad(lon2);
+
+            const v1 = [
+                Math.cos(phi1) * Math.cos(lam1),
+                Math.cos(phi1) * Math.sin(lam1),
+                Math.sin(phi1)
+            ];
+
+            const v2 = [
+                Math.cos(phi2) * Math.cos(lam2),
+                Math.cos(phi2) * Math.sin(lam2),
+                Math.sin(phi2)
+            ];
+
+            let N = [
+                v1[1] * v2[2] - v1[2] * v2[1],
+                v1[2] * v2[0] - v1[0] * v2[2],
+                v1[0] * v2[1] - v1[1] * v2[0]
+            ];
+            const lenN = Math.hypot(N[0], N[1], N[2]);
+            N = [N[0] / lenN, N[1] / lenN, N[2] / lenN];
+
+            const u = v1;
+            const w = [
+                N[1] * u[2] - N[2] * u[1],
+                N[2] * u[0] - N[0] * u[2],
+                N[0] * u[1] - N[1] * u[0]
+            ];
+
+            let coords = [];
+            let prevLon = lon1;
+
+            for (let i = 0; i <= pointsPerLoop; i++) {
+                const theta = (i / pointsPerLoop) * 2 * Math.PI;
+
+                const x = Math.cos(theta) * u[0] + Math.sin(theta) * w[0];
+                const y = Math.cos(theta) * u[1] + Math.sin(theta) * w[1];
+                const z = Math.cos(theta) * u[2] + Math.sin(theta) * w[2];
+
+                const lat = toDeg(Math.asin(z));
+                let lon = toDeg(Math.atan2(y, x));
+
+                while (lon - prevLon > 180) lon -= 360;
+                while (lon - prevLon < -180) lon += 360;
+
+                coords.push([lat, lon]);
+                prevLon = lon;
+            }
+
+            return coords;
+        }
+
+        const routeCoords = generateGreatCircleOrbit(startLat, startLon, targetLat, targetLon, 2000);
+
+        // 各地点間の累積距離（km）を計算
+        function calculateCumulativeDistances(coords) {
+            const toRad = deg => deg * Math.PI / 180;
+            let cumDist = [0];
+            let total = 0;
+
+            for (let i = 0; i < coords.length - 1; i++) {
+                const lat1 = toRad(coords[i][0]), lon1 = toRad(coords[i][1]);
+                const lat2 = toRad(coords[i+1][0]), lon2 = toRad(coords[i+1][1]);
+
+                const dLat = lat2 - lat1;
+                const dLon = lon2 - lon1;
+
+                const a = Math.sin(dLat / 2) ** 2 +
+                          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                const dist = EARTH_RADIUS_KM * c;
+
+                total += dist;
+                cumDist.push(total);
+            }
+            return cumDist;
+        }
+
+        const cumDistances = calculateCumulativeDistances(routeCoords);
+        const loopDistanceKm = cumDistances[cumDistances.length - 1];
+
+        // 軌跡ラインの描画
+        var polyline = L.polyline(routeCoords, {
+            color: '#0076ff',
+            weight: 4,
+            opacity: 0.85,
+            smoothFactor: 1
+        }).addTo(map);
+
+        // ピン（マーカー）配置
+        var customIcon = L.divIcon({
+            className: 'glow-marker',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+
+        var movingMarker = L.marker([startLat, startLon], { icon: customIcon }).addTo(map);
+
+        // DOM要素
+        const elTime = document.getElementById('val-time');
+        const elLat = document.getElementById('val-lat');
+        const elLon = document.getElementById('val-lon');
+        const elDist = document.getElementById('val-dist');
+        const elLoops = document.getElementById('val-loops');
+        const btnTrack = document.getElementById('btn-track');
+
+        // 追尾状態切り替え関数
+        function setTrackingState(state) {
+            isTracking = state;
+            if (isTracking) {
+                btnTrack.textContent = "追尾を解除";
+                btnTrack.classList.remove("is-off");
+            } else {
+                btnTrack.textContent = "現在地にジャンプ＆追尾";
+                btnTrack.classList.add("is-off");
+            }
+        }
+
+        // ボタンクリック時の挙動
+        btnTrack.addEventListener('click', () => {
+            setTrackingState(!isTracking);
+            if (isTracking) {
+                // 追尾ONにした瞬間、ピンの位置にカメラをスムーズ移動
+                map.panTo(movingMarker.getLatLng(), { animate: true });
+            }
+        });
+
+        // ユーザーが手動で地図をドラッグ動かした場合は自動で追尾OFFにする
+        map.on('dragstart', () => {
+            if (isTracking) {
+                setTrackingState(false);
+            }
+        });
+
+        // リアルタイム移動 & 追尾計算関数
+        function updateRealtimePosition() {
+            const nowMs = Date.now();
+            const elapsedMs = nowMs - START_TIME_MS;
+
+            // 2009年4月23日 03:00 からの総移動距離 (km)
+            const totalDistanceKm = elapsedMs * SPEED_KM_MS;
+            
+            // 現在の周回数と、今回の周における移動距離
+            const loops = Math.floor(totalDistanceKm / loopDistanceKm);
+            const currentLoopDist = totalDistanceKm % loopDistanceKm;
+
+            // 距離に対応する座標の補間計算
+            let idx = cumDistances.findIndex(d => d >= currentLoopDist);
+            if (idx <= 0) idx = 1;
+
+            const d1 = cumDistances[idx - 1];
+            const d2 = cumDistances[idx];
+            const t = (currentLoopDist - d1) / (d2 - d1 || 1);
+
+            const p1 = routeCoords[idx - 1];
+            const p2 = routeCoords[idx];
+
+            const currentLat = p1[0] + (p2[0] - p1[0]) * t;
+            const currentLon = p1[1] + (p2[1] - p1[1]) * t;
+
+            // ピン位置の更新
+            movingMarker.setLatLng([currentLat, currentLon]);
+
+            // カメラ追尾（isTracking が true の時のみカメラを動かす）
+            if (isTracking) {
+                map.setView([currentLat, currentLon], map.getZoom(), { animate: false });
+            }
+
+            // UIパネルのリアルタイム表示更新
+            const now = new Date(nowMs);
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const nowString = `${year}年${month}月${day}日 ${hours}:${minutes}:${seconds}`;
+
+            // 経度を -180 ~ 180 に正規化して表示
+            let displayLon = ((currentLon + 180) % 360 + 360) % 360 - 180;
+
+            elTime.textContent = nowString;
+            elLat.textContent = currentLat.toFixed(6) + '°';
+            elLon.textContent = displayLon.toFixed(6) + '°';
+            elDist.textContent = totalDistanceKm.toLocaleString('ja-JP', { maximumFractionDigits: 1 }) + ' km';
+            elLoops.textContent = `${loops} 周目 (${(currentLoopDist / loopDistanceKm * 100).toFixed(1)}%)`;
+
+            requestAnimationFrame(updateRealtimePosition);
+        }
+
+        // アニメーションループ開始
+        requestAnimationFrame(updateRealtimePosition);
+    </script>
+</body>
+</html>
