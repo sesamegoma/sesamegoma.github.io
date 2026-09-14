@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>地球一周トラッカー（時速4kmリアルタイム）</title>
+    <title>N彅剛でんぐり返しマップ</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         #map { width: 100%; height: 100vh; margin: 0; background: #e5e7eb; }
@@ -152,13 +152,11 @@
 
     <div id="info-panel">
         <div class="panel-header" id="panel-header">
-            <h2>リアルタイム追尾ステータス</h2>
+            <h2>N彅剛でんぐり返しマップ</h2>
             <span class="toggle-icon" id="toggle-icon">▲</span>
         </div>
         <div id="panel-body">
-            <div class="info-row"><span class="info-label">開始日時:</span> <span class="info-val">2009年04月23日 03:00:00</span></div>
             <div class="info-row"><span class="info-label">現在日時:</span> <span class="info-val" id="val-time">-</span></div>
-            <div class="info-row"><span class="info-label">移動速度:</span> <span class="info-val">時速 4.0 km</span></div>
             <div class="info-row"><span class="info-label">緯度:</span> <span class="info-val" id="val-lat">-</span></div>
             <div class="info-row"><span class="info-label">経度:</span> <span class="info-val" id="val-lon">-</span></div>
             <div class="info-row"><span class="info-label">総移動距離:</span> <span class="info-val" id="val-dist">-</span></div>
@@ -416,7 +414,7 @@
             elLat.textContent = currentLat.toFixed(6) + '°';
             elLon.textContent = displayLon.toFixed(6) + '°';
             elDist.textContent = totalDistanceKm.toLocaleString('ja-JP', { maximumFractionDigits: 1 }) + ' km';
-            elLoops.textContent = `${loops} 周目 (${(currentLoopDist / loopDistanceKm * 100).toFixed(1)}%)`;
+            elLoops.textContent = `${loops} 周目`;
 
             requestAnimationFrame(updateRealtimePosition);
         }
